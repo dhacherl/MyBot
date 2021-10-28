@@ -29,11 +29,11 @@
 
 package org.firstinspires.ftc.teamcode;
 
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
+import com.qualcomm.hardware.bosch.BNO055IMU;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.util.Range;
-import java.lang.Math;
+
+import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
 
 /**
  * This file provides basic Teleop driving for a robot.
@@ -50,42 +50,15 @@ import java.lang.Math;
  * Remove or comment out the @Disabled line to add this opmode to the Driver Station OpMode list
  */
 
-@TeleOp(name="Teleop Mech Drive", group="Hacherl")
+@TeleOp(name="Absolute Drive", group="Hacherl")
 // @Disabled
-public class Teleop_MechDrive extends OpMode{
+public class Absolute_Drive extends OpMode{
 
     /* Declare OpMode members. */
     HacherlBot robot  = new HacherlBot(); // use the class created to define a HacherlBot's hardware
-    private final static double deadZoneSize = 0.05;   // size of joystick dead zone
-    private final static double sensitivityCurve = 1.5; // curvature of sensitivity; 1.0 == linear
+    double initialHeading;
+    double lastCommandedHeading;
 
-    /*
-     * Code to take a joystick input and condition it.
-     *  - Expand deadzone around stick dead center
-     *  - Scale input to reduce sensitivity near center (increasing near full stick)
-     */
-    static double ConditionInput(double rawInput) {
-        double cooked;
-        boolean signPositive = rawInput > 0.0;
-
-        cooked = Math.abs(rawInput);
-        if (cooked <= deadZoneSize ) {
-            cooked = 0.0;
-        } else {
-            cooked = Math.pow(cooked, sensitivityCurve);
-        }
-        return signPositive ? cooked : -cooked;
-    }
-
-    // constants for indices
-    private final static int indexFL = 0;
-    private final static int indexFR = 1;
-    private final static int indexBL = 2;
-    private final static int indexBR = 3;
-    // Unit vectors in power space for each of the units in motion space
-    private final static double[] unitAdvance = {1.0, 1.0, 1.0, 1.0};
-    private final static double[] unitStrafe = {1.0, -1.0, -1.0, 1.0};
-    private final static double[] unitRotate = {1.0, -1.0, 1.0, -1.0};
 
     /* deadcode
     static class PowerMatrix {
@@ -153,8 +126,17 @@ public class Teleop_MechDrive extends OpMode{
          */
         robot.init(hardwareMap);
 
+        //BUGBUG Initialize IMU, determine starting robot orientation
+        BNO055IMU.Parameters imuParams;
+        imuParams = new BNO055IMU.Parameters();
+        imuParams.angleUnit = BNO055IMU.AngleUnit.DEGREES;
+        robot.revIMU.initialize(imuParams);
+        // Orientation
+        initialHeading = robot.revIMU.getAngularOrientation().firstAngle;
+        lastCommandedHeading = initialHeading;
+
         // Send telemetry message to signify robot waiting;
-        telemetry.addData("Say", "Hello Driver");    //
+        telemetry.addData("Hello Driver, initial orientation is", "%.1f", initialHeading);
     }
 
     /*
@@ -179,51 +161,63 @@ public class Teleop_MechDrive extends OpMode{
         double advance;
         double strafe;
         double rotate;
-        double[] motorPower;
-        motorPower = new double[4];
+        double upMotion;
+        double overMotion;
+        double currentHeadingDelta;
+        Orientation facing;
 
         // (note: The joystick goes negative when pushed forwards, so negate it)
-        advance = -gamepad1.right_stick_y;
-        strafe = gamepad1.right_stick_x;
+        upMotion = -gamepad1.right_stick_y;
+        overMotion = gamepad1.right_stick_x;
         rotate = gamepad1.left_stick_x;
 
-        // adjust sensitivity and dead spot
-        advance = ConditionInput(advance);
-        strafe = ConditionInput(strafe);
-        rotate = ConditionInput(rotate);
+        // adjust for sensitivity and dead spot
+        upMotion = HacherlBot.ConditionInput(upMotion);
+        overMotion = HacherlBot.ConditionInput(overMotion);
+        rotate = HacherlBot.ConditionInput(rotate);
 
-        // translate from control space to power space
-        for (int i = 0; i < 4; i++) {
-            motorPower[i] = advance * unitAdvance[i];
-            motorPower[i] += strafe * unitStrafe[i];
-            motorPower[i] += rotate * unitRotate[i];
-        }
+        // Translate from up and over to advance and strafe
+        // a positive currentHeadingDelta indicates that the robot has rotated COUNTER-clockwise
+        // from its initial position (i.e., from the field reference frame), meaning that advance motion
+        // needs to be slightly reduced from the intended up motion, and that there needs to be a
+        // small right strafe component added.  At zero angle cos(delta) is 1, and sin(delta) is
+        // 0, so the advance is exactly what it was with no correction and strafe remains at 0.
+        // With a small angle cos() is just under 1, so advance is just less than upMotion,
+        // while (since overMotion is 0) strafe is set to a value just above 0.
+        facing = robot.revIMU.getAngularOrientation();
+        currentHeadingDelta = facing.firstAngle - initialHeading;
+        double radCHD = Math.toRadians(currentHeadingDelta);
+        advance = upMotion*Math.cos(radCHD) - overMotion*Math.sin(radCHD);
+        strafe = overMotion*Math.cos(radCHD) + upMotion*Math.sin(radCHD);
 
-        // make sure we're not overpowering motor
-        double maxVal = 0.0;
-        for (int i = 0; i < 4; i++) {
-            maxVal = Math.max(maxVal, Math.abs(motorPower[i]));
-        }
-        if (maxVal > 1.0) {
-            for (int i = 0; i < 4; i++) {
-                motorPower[i] /= maxVal;
+        // Maintain our last heading, if we're not being commanded to turn
+        if (rotate != 0.0) {
+            // We're being commanded to turn to a new heading, so remember where we are now
+            lastCommandedHeading = facing.firstAngle;
+        } else {
+            // We're not being told to turn, so we're supposed to be holding the current orientation.
+            // If we're not, add some rotation to get back to where we should be.
+            double headingDrift =  facing.firstAngle - lastCommandedHeading;
+            //BUGBUG correct for +/- 180 degree wraparound?
+
+            // If headingDrift is positive we need to add some right rotation.  Scale the amount
+            // of rotation to the amount of drift, but only add the rotation if we're already
+            // planning to move.  It we're sitting still, just sit still.
+            if ((advance != 0.0) || (strafe != 0.0)) {
+                //BUGBUG The scaled amount of correction is a blind guess
+                rotate = 0.01 * headingDrift;
             }
         }
 
-
-        robot.frontLeftDrive.setPower(motorPower[indexFL]);
-        robot.frontRightDrive.setPower(motorPower[indexFR]);
-        robot.backLeftDrive.setPower(motorPower[indexBL]);
-        robot.backRightDrive.setPower(motorPower[indexBR]);
+        robot.DriveAt(advance, strafe, rotate);
 
         // Send telemetry message to signify robot running;
+        telemetry.addData("facing", " %.1f %.1f %.1f", facing.firstAngle, facing.secondAngle, facing.thirdAngle);
+        telemetry.addData("heading delta", "%.1f", currentHeadingDelta);
+        telemetry.addData("up and over", "%.3f   %.3f", upMotion, overMotion);
         telemetry.addData("advance",  "%.3f", advance);
         telemetry.addData("strafe",  "%.3f", strafe);
         telemetry.addData("rotate", "%.3f", rotate);
-        telemetry.addData("fl", "%.3f ", motorPower[indexFL]);
-        telemetry.addData("fr", "%.3f ", motorPower[indexFR]);
-        telemetry.addData("bl", "%.3f ", motorPower[indexBL]);
-        telemetry.addData("br", "%.3f ", motorPower[indexBR]);
     }
 
     /*
@@ -231,5 +225,6 @@ public class Teleop_MechDrive extends OpMode{
      */
     @Override
     public void stop() {
+        robot.StopAll();
     }
 }

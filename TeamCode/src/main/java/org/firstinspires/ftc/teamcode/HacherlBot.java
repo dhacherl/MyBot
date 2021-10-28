@@ -27,8 +27,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package org.firstinspires.ftc.robotcontroller.external.samples;
+package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.hardware.bosch.BNO055IMU;
+import com.qualcomm.robotcore.hardware.CompassSensor;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
@@ -38,37 +40,59 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  * This is NOT an opmode.
  *
  * This class can be used to define all the specific hardware for a single robot.
- * In this case that robot is a Pushbot.
- * See PushbotTeleopTank_Iterative and others classes starting with "Pushbot" for usage examples.
  *
- * This hardware class assumes the following device names have been configured on the robot:
- * Note:  All names are lower case and some have single spaces between words.
- *
- * Motor channel:  Left  drive motor:        "left_drive"
- * Motor channel:  Right drive motor:        "right_drive"
- * Motor channel:  Manipulator drive motor:  "left_arm"
- * Servo channel:  Servo to open left claw:  "left_hand"
- * Servo channel:  Servo to open right claw: "right_hand"
+
  */
-public class HardwarePushbot
+public class HacherlBot
 {
     /* Public OpMode members. */
-    public DcMotor  leftDrive   = null;
-    public DcMotor  rightDrive  = null;
-    public DcMotor  leftArm     = null;
-    public Servo    leftClaw    = null;
-    public Servo    rightClaw   = null;
-
-    public static final double MID_SERVO       =  0.5 ;
-    public static final double ARM_UP_POWER    =  0.45 ;
-    public static final double ARM_DOWN_POWER  = -0.45 ;
+    public BNO055IMU revIMU;
 
     /* local OpMode members. */
     HardwareMap hwMap           =  null;
     private ElapsedTime period  = new ElapsedTime();
+    private DcMotor  frontLeftDrive   = null;
+    private DcMotor  frontRightDrive  = null;
+    private DcMotor  backLeftDrive   = null;
+    private DcMotor  backRightDrive  = null;
+    private double[] motorPower = new double[4];
+
+    // constants for indices
+    private final static int indexFL = 0;
+    private final static int indexFR = 1;
+    private final static int indexBL = 2;
+    private final static int indexBR = 3;
+    // Unit vectors in power space for each of the units in motion space
+    private final static double[] unitAdvance = {1.0, 1.0, 1.0, 1.0};
+    private final static double[] unitStrafe = {1.0, -1.0, -1.0, 1.0};
+    private final static double[] unitRotate = {1.0, -1.0, 1.0, -1.0};
+
+
+    private final static double deadZoneSize = 0.03;   // size of joystick dead zone
+    private final static double sensitivityCurve = 2.0; // curvature of sensitivity; 1.0 == linear
+
+    /*
+     * Code to take a joystick input and condition it.
+     *  - Expand deadzone around stick dead center
+     *  - Scale input to reduce sensitivity near center (increasing near full stick)
+     */
+    static double ConditionInput(double rawInput) {
+        double cooked;
+        boolean signPositive = rawInput > 0.0;
+
+        cooked = Math.abs(rawInput);
+        if (cooked <= deadZoneSize ) {
+            cooked = 0.0;
+        } else {
+            cooked = Math.pow(cooked, sensitivityCurve);
+        }
+        return signPositive ? cooked : -cooked;
+    }
+
+
 
     /* Constructor */
-    public HardwarePushbot(){
+    public HacherlBot(){
 
     }
 
@@ -78,28 +102,74 @@ public class HardwarePushbot
         hwMap = ahwMap;
 
         // Define and Initialize Motors
-        leftDrive  = hwMap.get(DcMotor.class, "left_drive");
-        rightDrive = hwMap.get(DcMotor.class, "right_drive");
-        leftArm    = hwMap.get(DcMotor.class, "left_arm");
-        leftDrive.setDirection(DcMotor.Direction.FORWARD); // Set to REVERSE if using AndyMark motors
-        rightDrive.setDirection(DcMotor.Direction.REVERSE);// Set to FORWARD if using AndyMark motors
+        frontLeftDrive  = hwMap.get(DcMotor.class, "front_left_drive");
+        frontRightDrive = hwMap.get(DcMotor.class, "front_right_drive");
+        backLeftDrive  = hwMap.get(DcMotor.class, "back_left_drive");
+        backRightDrive = hwMap.get(DcMotor.class, "back_right_drive");
 
-        // Set all motors to zero power
-        leftDrive.setPower(0);
-        rightDrive.setPower(0);
-        leftArm.setPower(0);
+        frontLeftDrive.setDirection(DcMotor.Direction.REVERSE);
+        frontRightDrive.setDirection(DcMotor.Direction.FORWARD);
+        backLeftDrive.setDirection(DcMotor.Direction.REVERSE);
+        backRightDrive.setDirection(DcMotor.Direction.FORWARD);
+        // Set all motors to zero power, just in case
+        frontLeftDrive.setPower(0);
+        frontRightDrive.setPower(0);
+        backLeftDrive.setPower(0);
+        backRightDrive.setPower(0);
+
 
         // Set all motors to run without encoders.
         // May want to use RUN_USING_ENCODERS if encoders are installed.
-        leftDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        rightDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        leftArm.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        frontLeftDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        frontRightDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        backLeftDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        backRightDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
-        // Define and initialize ALL installed servos.
-        leftClaw  = hwMap.get(Servo.class, "left_hand");
-        rightClaw = hwMap.get(Servo.class, "right_hand");
-        leftClaw.setPosition(MID_SERVO);
-        rightClaw.setPosition(MID_SERVO);
+        revIMU = hwMap.get(BNO055IMU.class, "imu");
+
+    }
+
+    /* Basic Teleop drive method */
+    public void DriveAt(double advance, double strafe, double rotate) {
+        // translate from control space to power space
+        for (int i = 0; i < 4; i++) {
+            motorPower[i] = advance * unitAdvance[i];
+            motorPower[i] += strafe * unitStrafe[i];
+            motorPower[i] += rotate * unitRotate[i];
+        }
+
+        // make sure we're not overpowering motor
+        double maxVal = 0.0;
+        for (int i = 0; i < 4; i++) {
+            maxVal = Math.max(maxVal, Math.abs(motorPower[i]));
+        }
+        if (maxVal > 1.0) {
+            for (int i = 0; i < 4; i++) {
+                motorPower[i] /= maxVal;
+            }
+        }
+
+        frontLeftDrive.setPower(motorPower[indexFL]);
+        frontRightDrive.setPower(motorPower[indexFR]);
+        backLeftDrive.setPower(motorPower[indexBL]);
+        backRightDrive.setPower(motorPower[indexBR]);
+        // telemetry.addData("fl    fr", " %.3f  %.3f", motorPower[indexFL], motorPower[indexFR]);
+        // telemetry.addData("bl    br", " %.3f  %.3f", motorPower[indexBL], motorPower[indexBR]);
+
+    }
+
+    /* stop quickly */
+    public void StopAll() {
+        frontLeftDrive.setPower(0.0);
+        frontRightDrive.setPower(0.0);
+        backLeftDrive.setPower(0.0);
+        backRightDrive.setPower(0.0);
+
+        frontLeftDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        frontRightDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        backLeftDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        backRightDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+
     }
  }
 

@@ -32,18 +32,17 @@ package org.firstinspires.ftc.teamcode;
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.util.Range;
 import java.lang.Math;
 
 /**
- * This file provides basic Telop driving for a Pushbot robot.
+ * This file provides basic Teleop driving for a robot.
  * The code is structured as an Iterative OpMode
  *
- * This OpMode uses the common Pushbot hardware class to define the devices on the robot.
- * All device access is managed through the HardwarePushbot class.
+ * This OpMode uses the common hardware class to define the devices on the robot.
+ * All device access is managed through the HacherlBot class.
  *
  * This particular OpMode executes a basic Tank Drive Teleop for a PushBot
- * It raises and lowers the claw using the Gampad Y and A buttons respectively.
+ * It raises and lowers the claw using the Gamepad Y and A buttons respectively.
  * It also opens and closes the claws slowly using the left and right Bumper buttons.
  *
  * Use Android Studios to Copy this Class, and Paste it into your team's code folder with a new name.
@@ -51,31 +50,67 @@ import java.lang.Math;
  */
 
 @TeleOp(name="Teleop Mech Drive", group="Hacherl")
-@Disabled
+// @Disabled
 public class Teleop_MechDrive extends OpMode{
 
     /* Declare OpMode members. */
-    HacherlBot robot       = new HacherlBot(); // use the class created to define a Pushbot's hardware
-    //double          clawOffset  = 0.0 ;                  // Servo mid position
-    //final double    CLAW_SPEED  = 0.02 ;                 // sets rate to move servo
+    HacherlBot robot  = new HacherlBot(); // use the class created to define a HacherlBot's hardware
 
-    /*
-     * Code to take a joystick input and condition it.
-     *  - Expand deadzone around stick dead center
-     *  - Scale input to reduce sensitivity near center (increasing near full stick)
-     */
-    static double ConditionInput(double rawInput) {
-        double cooked;
-        boolean signPositive = rawInput > 0.0;
+    /* deadcode
+    static class PowerMatrix {
+        double flPower, frPower, blPower, brPower;
 
-        cooked = Math.abs(rawInput);
-        if (cooked <= 0.05) {
-            cooked = 0.0;
-        } else {
-            cooked = Math.pow(cooked, 1.5);
+        PowerMatrix(double argFL, double argFR, double argBL, double argBR) {
+            flPower = argFL;
+            frPower = argFR;
+            blPower = argBL;
+            brPower = argBR;
         }
-        return signPositive ? cooked : -cooked;
+
+        static PowerMatrix scale(PowerMatrix argIn, double argScale) {
+            argIn.flPower = argIn.flPower * argScale;
+            argIn.frPower = argIn.frPower * argScale;
+            argIn.blPower = argIn.blPower * argScale;
+            argIn.brPower = argIn.brPower * argScale;
+            return argIn;
+        }
+
+        static PowerMatrix add(PowerMatrix argOne, PowerMatrix argTwo) {
+            argOne.flPower += argTwo.flPower;
+            argOne.frPower += argTwo.frPower;
+            argOne.blPower += argTwo.blPower;
+            argOne.brPower += argTwo.brPower;
+            return argOne;
+        }
+
+        static PowerMatrix normalize(PowerMatrix argIn) {
+            double maxVal;
+
+            maxVal = Math.max(Math.abs(argIn.flPower),
+                              Math.max(Math.abs(argIn.frPower),
+                                      Math.max(Math.abs(argIn.blPower),
+                                              Math.abs(argIn.brPower))));
+            if (maxVal > 1.0) {
+                argIn.flPower /= maxVal;
+                argIn.frPower /= maxVal;
+                argIn.blPower /= maxVal;
+                argIn.brPower /= maxVal;
+            }
+            return argIn;
+        }
+
     }
+
+    PowerMatrix pmForward;
+    PowerMatrix pmRight;
+    PowerMatrix pmClockwise;
+    {
+        pmForward  = new PowerMatrix(1.0, 1.0, 1.0, 1.0);
+        pmRight = new PowerMatrix(1.0, 1.0, -1.0, -1.0);
+        pmClockwise = new PowerMatrix(1.0, -1.0, 1.0, -1.0);
+    }
+    end of deadcode */
+
 
     /*
      * Code to run ONCE when the driver hits INIT
@@ -85,7 +120,7 @@ public class Teleop_MechDrive extends OpMode{
         /* Initialize the hardware variables.
          * The init() method of the hardware class does all the work here
          */
-        // robot.init(hardwareMap);
+        robot.init(hardwareMap);
 
         // Send telemetry message to signify robot waiting;
         telemetry.addData("Say", "Hello Driver");    //
@@ -119,23 +154,24 @@ public class Teleop_MechDrive extends OpMode{
         strafe = gamepad1.right_stick_x;
         rotate = gamepad1.left_stick_x;
 
-        advance = ConditionInput(advance);
-        strafe = ConditionInput(strafe);
-        rotate = ConditionInput(rotate);
+        // adjust sensitivity and dead spot
+        advance = HacherlBot.ConditionInput(advance);
+        strafe = HacherlBot.ConditionInput(strafe);
+        rotate = HacherlBot.ConditionInput(rotate);
 
-        //robot.leftDrive.setPower(left);
-        //robot.rightDrive.setPower(right);
+        robot.DriveAt(advance, strafe, rotate);
 
         // Send telemetry message to signify robot running;
-        telemetry.addData("advance",  "Offset = %.3f", advance);
+        telemetry.addData("advance",  "%.3f", advance);
         telemetry.addData("strafe",  "%.3f", strafe);
         telemetry.addData("rotate", "%.3f", rotate);
-    }
+  }
 
     /*
      * Code to run ONCE after the driver hits STOP
      */
     @Override
     public void stop() {
+        robot.StopAll();
     }
 }
