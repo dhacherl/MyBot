@@ -30,6 +30,7 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.hardware.bosch.BNO055IMU;
+import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.CompassSensor;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.HardwareMap;
@@ -55,6 +56,7 @@ public class HacherlBot
     private DcMotor  frontRightDrive  = null;
     private DcMotor  backLeftDrive   = null;
     private DcMotor  backRightDrive  = null;
+    private DcMotor[] driveMotors = new DcMotor[4];
     private double[] motorPower = new double[4];
 
     // constants for indices
@@ -62,6 +64,7 @@ public class HacherlBot
     private final static int indexFR = 1;
     private final static int indexBL = 2;
     private final static int indexBR = 3;
+    private final static int maxMotorIndex = 3;
     // Unit vectors in power space for each of the units in motion space
     private final static double[] unitAdvance = {1.0, 1.0, 1.0, 1.0};
     private final static double[] unitStrafe = {1.0, -1.0, -1.0, 1.0};
@@ -106,33 +109,35 @@ public class HacherlBot
         frontRightDrive = hwMap.get(DcMotor.class, "front_right_drive");
         backLeftDrive  = hwMap.get(DcMotor.class, "back_left_drive");
         backRightDrive = hwMap.get(DcMotor.class, "back_right_drive");
+        // For looping purposes
+        driveMotors[indexFL] = frontLeftDrive;
+        driveMotors[indexFR] = frontRightDrive;
+        driveMotors[indexBL] = backLeftDrive;
+        driveMotors[indexBR] = backRightDrive;
 
         frontLeftDrive.setDirection(DcMotor.Direction.REVERSE);
         frontRightDrive.setDirection(DcMotor.Direction.FORWARD);
         backLeftDrive.setDirection(DcMotor.Direction.REVERSE);
         backRightDrive.setDirection(DcMotor.Direction.FORWARD);
-        // Set all motors to zero power, just in case
-        frontLeftDrive.setPower(0);
-        frontRightDrive.setPower(0);
-        backLeftDrive.setPower(0);
-        backRightDrive.setPower(0);
 
+        // Set all motors to zero power, just in case
+        for (int i = 0; i <= maxMotorIndex; i++) {
+            driveMotors[i].setPower(0);
+        }
 
         // Set all motors to run without encoders.
         // May want to use RUN_USING_ENCODERS if encoders are installed.
-        frontLeftDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        frontRightDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        backLeftDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        backRightDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        for (int i = 0; i <= maxMotorIndex; i++) {
+            driveMotors[i].setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        }
 
         revIMU = hwMap.get(BNO055IMU.class, "imu");
-
     }
 
     /* Basic Teleop drive method */
     public void DriveAt(double advance, double strafe, double rotate) {
         // translate from control space to power space
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i <= maxMotorIndex; i++) {
             motorPower[i] = advance * unitAdvance[i];
             motorPower[i] += strafe * unitStrafe[i];
             motorPower[i] += rotate * unitRotate[i];
@@ -140,11 +145,11 @@ public class HacherlBot
 
         // make sure we're not overpowering motor
         double maxVal = 0.0;
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i <= maxMotorIndex; i++) {
             maxVal = Math.max(maxVal, Math.abs(motorPower[i]));
         }
         if (maxVal > 1.0) {
-            for (int i = 0; i < 4; i++) {
+            for (int i = 0; i <= maxMotorIndex; i++) {
                 motorPower[i] /= maxVal;
             }
         }
@@ -156,6 +161,86 @@ public class HacherlBot
         // telemetry.addData("fl    fr", " %.3f  %.3f", motorPower[indexFL], motorPower[indexFR]);
         // telemetry.addData("bl    br", " %.3f  %.3f", motorPower[indexBL], motorPower[indexBR]);
 
+    }
+
+    private static final int TICKS_PER_ADVANCE_CM = 17;  /* totally wrong guess */
+    /* Basic autonomous motion method */
+    public void AutoAdvance(float advanceCM, double speed, LinearOpMode that) {
+        int ticks = (int)(advanceCM * TICKS_PER_ADVANCE_CM);
+
+        if (!that.opModeIsActive()) {
+            return;
+        }
+
+        // Set target
+        for (int i = 0; i <= maxMotorIndex; i++) {
+            // Note that the unit vector will reverse the tick sign if necessary
+            driveMotors[i].setTargetPosition((int)(ticks * unitAdvance[i]));
+        }
+
+        // Prepare to run autonomously
+        for (int i = 0; i <= maxMotorIndex; i++) {
+            driveMotors[i].setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        }
+
+         // Go!
+        for (int i = 0; i <= maxMotorIndex; i++) {
+            driveMotors[i].setPower(speed);
+        }
+
+        // Are we there yet?
+        runningLoop:
+        while (that.opModeIsActive()) {
+            for (int i = 0; i <= maxMotorIndex; i++) {
+                if (!driveMotors[i].isBusy()) {
+                    // At least one motor is done, so stop
+                    break runningLoop;
+                }
+            }
+        }
+
+        // Quit moving
+        StopAll();
+    }
+
+    private static final int TICKS_PER_STRAFE_CM = 18;  /* totally wrong guess */
+    /* Basic autonomous motion method */
+    public void AutoStrafe(float strafeCM, double speed, LinearOpMode that) {
+        int ticks = (int)(strafeCM * TICKS_PER_STRAFE_CM);
+
+        if (!that.opModeIsActive()) {
+            return;
+        }
+
+        // Set target
+        for (int i = 0; i <= maxMotorIndex; i++) {
+            // Note that the unit vector will reverse the tick sign if necessary
+            driveMotors[i].setTargetPosition((int)(ticks * unitStrafe[i]));
+        }
+
+        // Prepare to run autonomously
+        for (int i = 0; i <= maxMotorIndex; i++) {
+            driveMotors[i].setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        }
+
+        // Go!
+        for (int i = 0; i <= maxMotorIndex; i++) {
+            driveMotors[i].setPower(speed);
+        }
+
+        // Are we there yet?
+        runningLoop:
+        while (that.opModeIsActive()) {
+            for (int i = 0; i <= maxMotorIndex; i++) {
+                if (!driveMotors[i].isBusy()) {
+                    // At least one motor is done, so stop
+                    break runningLoop;
+                }
+            }
+        }
+
+        // Quit moving
+        StopAll();
     }
 
     /* stop quickly */

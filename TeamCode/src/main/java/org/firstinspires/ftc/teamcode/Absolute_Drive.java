@@ -42,10 +42,6 @@ import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
  * This OpMode uses the common hardware class to define the devices on the robot.
  * All device access is managed through the HacherlBot class.
  *
- * This particular OpMode executes a basic Tank Drive Teleop for a PushBot
- * It raises and lowers the claw using the Gamepad Y and A buttons respectively.
- * It also opens and closes the claws slowly using the left and right Bumper buttons.
- *
  * Use Android Studios to Copy this Class, and Paste it into your team's code folder with a new name.
  * Remove or comment out the @Disabled line to add this opmode to the Driver Station OpMode list
  */
@@ -58,63 +54,6 @@ public class Absolute_Drive extends OpMode{
     HacherlBot robot  = new HacherlBot(); // use the class created to define a HacherlBot's hardware
     double initialHeading;
     double lastCommandedHeading;
-
-
-    /* deadcode
-    static class PowerMatrix {
-        double flPower, frPower, blPower, brPower;
-
-        PowerMatrix(double argFL, double argFR, double argBL, double argBR) {
-            flPower = argFL;
-            frPower = argFR;
-            blPower = argBL;
-            brPower = argBR;
-        }
-
-        static PowerMatrix scale(PowerMatrix argIn, double argScale) {
-            argIn.flPower = argIn.flPower * argScale;
-            argIn.frPower = argIn.frPower * argScale;
-            argIn.blPower = argIn.blPower * argScale;
-            argIn.brPower = argIn.brPower * argScale;
-            return argIn;
-        }
-
-        static PowerMatrix add(PowerMatrix argOne, PowerMatrix argTwo) {
-            argOne.flPower += argTwo.flPower;
-            argOne.frPower += argTwo.frPower;
-            argOne.blPower += argTwo.blPower;
-            argOne.brPower += argTwo.brPower;
-            return argOne;
-        }
-
-        static PowerMatrix normalize(PowerMatrix argIn) {
-            double maxVal;
-
-            maxVal = Math.max(Math.abs(argIn.flPower),
-                              Math.max(Math.abs(argIn.frPower),
-                                      Math.max(Math.abs(argIn.blPower),
-                                              Math.abs(argIn.brPower))));
-            if (maxVal > 1.0) {
-                argIn.flPower /= maxVal;
-                argIn.frPower /= maxVal;
-                argIn.blPower /= maxVal;
-                argIn.brPower /= maxVal;
-            }
-            return argIn;
-        }
-
-    }
-
-    PowerMatrix pmForward;
-    PowerMatrix pmRight;
-    PowerMatrix pmClockwise;
-    {
-        pmForward  = new PowerMatrix(1.0, 1.0, 1.0, 1.0);
-        pmRight = new PowerMatrix(1.0, 1.0, -1.0, -1.0);
-        pmClockwise = new PowerMatrix(1.0, -1.0, 1.0, -1.0);
-    }
-    end of deadcode */
-
 
     /*
      * Code to run ONCE when the driver hits INIT
