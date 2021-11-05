@@ -149,6 +149,14 @@ public class Teleop_MechDrive extends OpMode{
         double strafe;
         double rotate;
 
+        // Just some quick A/B testing with encoders
+        if (gamepad1.a) {
+            robot.useEncoders(true);
+        }
+        if (gamepad1.b) {
+            robot.useEncoders(false);
+        }
+
         // (note: The joystick goes negative when pushed forwards, so negate it)
         advance = -gamepad1.right_stick_y;
         strafe = gamepad1.right_stick_x;

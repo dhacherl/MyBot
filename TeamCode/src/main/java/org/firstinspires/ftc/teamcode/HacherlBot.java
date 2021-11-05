@@ -37,6 +37,8 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
+import static java.lang.Boolean.FALSE;
+
 /**
  * This is NOT an opmode.
  *
@@ -48,6 +50,9 @@ public class HacherlBot
 {
     /* Public OpMode members. */
     public BNO055IMU revIMU;
+    public Servo pointerServo;
+    public static final double SERVO_HALF_RANGE = 135.0;
+    public static final double SERVO_FULL_RANGE = 2.0 * SERVO_HALF_RANGE;
 
     /* local OpMode members. */
     HardwareMap hwMap           =  null;
@@ -56,8 +61,9 @@ public class HacherlBot
     private DcMotor  frontRightDrive  = null;
     private DcMotor  backLeftDrive   = null;
     private DcMotor  backRightDrive  = null;
-    private DcMotor[] driveMotors = new DcMotor[4];
+    private final DcMotor[] driveMotors = new DcMotor[4];
     private double[] motorPower = new double[4];
+    boolean bCurrentlyUsingEncoders = true;
 
     // constants for indices
     private final static int indexFL = 0;
@@ -101,6 +107,7 @@ public class HacherlBot
 
     /* Initialize standard Hardware interfaces */
     public void init(HardwareMap ahwMap) {
+
         // Save reference to Hardware map
         hwMap = ahwMap;
 
@@ -109,7 +116,8 @@ public class HacherlBot
         frontRightDrive = hwMap.get(DcMotor.class, "front_right_drive");
         backLeftDrive  = hwMap.get(DcMotor.class, "back_left_drive");
         backRightDrive = hwMap.get(DcMotor.class, "back_right_drive");
-        // For looping purposes
+
+        // Stick the motors in an array for looping purposes
         driveMotors[indexFL] = frontLeftDrive;
         driveMotors[indexFR] = frontRightDrive;
         driveMotors[indexBL] = backLeftDrive;
@@ -120,27 +128,28 @@ public class HacherlBot
         backLeftDrive.setDirection(DcMotor.Direction.REVERSE);
         backRightDrive.setDirection(DcMotor.Direction.FORWARD);
 
-        // Set all motors to zero power, just in case
         for (int i = 0; i <= maxMotorIndex; i++) {
-            driveMotors[i].setPower(0);
-        }
-
-        // Set all motors to run without encoders.
-        // May want to use RUN_USING_ENCODERS if encoders are installed.
-        for (int i = 0; i <= maxMotorIndex; i++) {
-            driveMotors[i].setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+            // Set all motors to run using encoders.
+            driveMotors[i].setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            // Set to zero power, just in case
+            // driveMotors[i].setPower(0);
+            // If the motors aren't powered, we don't want them turning
+            driveMotors[i].setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         }
 
         revIMU = hwMap.get(BNO055IMU.class, "imu");
+
+        pointerServo = hwMap.get(Servo.class, "pointer_servo");
+        pointerServo.setPosition(0.5);
     }
 
     /* Basic Teleop drive method */
     public void DriveAt(double advance, double strafe, double rotate) {
         // translate from control space to power space
         for (int i = 0; i <= maxMotorIndex; i++) {
-            motorPower[i] = advance * unitAdvance[i];
-            motorPower[i] += strafe * unitStrafe[i];
-            motorPower[i] += rotate * unitRotate[i];
+            motorPower[i] = advance * unitAdvance[i]
+                            + strafe * unitStrafe[i]
+                            + rotate * unitRotate[i];
         }
 
         // make sure we're not overpowering motor
@@ -163,7 +172,24 @@ public class HacherlBot
 
     }
 
-    private static final int TICKS_PER_ADVANCE_CM = 17;  /* totally wrong guess */
+    /*
+     * Does using encoders during Teleop driving make any difference?
+     * Let's be able to change on the fly and see!
+     */
+    public void useEncoders(boolean bUse) {
+        if (bUse != bCurrentlyUsingEncoders) {
+            // Desired state has changed!
+            DcMotor.RunMode mode = bUse ? DcMotor.RunMode.RUN_USING_ENCODER
+                                        : DcMotor.RunMode.RUN_WITHOUT_ENCODER;
+
+            for (DcMotor eachMotor: driveMotors) {
+                eachMotor.setMode(mode);
+            }
+            bCurrentlyUsingEncoders = bUse;
+        }
+    }
+
+    private static final double TICKS_PER_ADVANCE_CM = 17;  /* totally wrong guess */
     /* Basic autonomous motion method */
     public void AutoAdvance(float advanceCM, double speed, LinearOpMode that) {
         int ticks = (int)(advanceCM * TICKS_PER_ADVANCE_CM);
@@ -203,7 +229,7 @@ public class HacherlBot
         StopAll();
     }
 
-    private static final int TICKS_PER_STRAFE_CM = 18;  /* totally wrong guess */
+    private static final double TICKS_PER_STRAFE_CM = 18;  /* totally wrong guess */
     /* Basic autonomous motion method */
     public void AutoStrafe(float strafeCM, double speed, LinearOpMode that) {
         int ticks = (int)(strafeCM * TICKS_PER_STRAFE_CM);

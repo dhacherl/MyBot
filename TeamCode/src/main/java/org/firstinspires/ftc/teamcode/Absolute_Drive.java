@@ -35,6 +35,9 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
 
+import static org.firstinspires.ftc.teamcode.HacherlBot.SERVO_FULL_RANGE;
+import static org.firstinspires.ftc.teamcode.HacherlBot.SERVO_HALF_RANGE;
+
 /**
  * This file provides basic Teleop driving for a robot.
  * The code is structured as an Iterative OpMode
@@ -129,6 +132,7 @@ public class Absolute_Drive extends OpMode{
         advance = upMotion*Math.cos(radCHD) - overMotion*Math.sin(radCHD);
         strafe = overMotion*Math.cos(radCHD) + upMotion*Math.sin(radCHD);
 
+
         // Maintain our last heading, if we're not being commanded to turn
         if (rotate != 0.0) {
             // We're being commanded to turn to a new heading, so remember where we are now
@@ -146,6 +150,11 @@ public class Absolute_Drive extends OpMode{
                 //BUGBUG The scaled amount of correction is a blind guess
                 rotate = 0.01 * headingDrift;
             }
+        }
+
+        // if we're within servo limits, pointer the servo to "up"
+        if ((currentHeadingDelta > -SERVO_HALF_RANGE) && (currentHeadingDelta < SERVO_HALF_RANGE)) {
+            robot.pointerServo.setPosition(0.5 + currentHeadingDelta/(SERVO_FULL_RANGE));
         }
 
         robot.DriveAt(advance, strafe, rotate);
