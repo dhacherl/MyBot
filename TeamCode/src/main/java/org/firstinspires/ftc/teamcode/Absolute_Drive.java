@@ -96,6 +96,16 @@ public class Absolute_Drive extends OpMode{
     }
 
     /*
+     * Helper function to keep angles within (-180,180)
+     */
+    double normalizeAngle(double angle) {
+        double newAngle = angle;
+        while (newAngle < -180) newAngle += 360;
+        while (newAngle > 180) newAngle -= 360;
+        return newAngle;
+    }
+
+    /*
      * Code to run REPEATEDLY after the driver hits PLAY but before they hit STOP
      */
     @Override
@@ -118,6 +128,12 @@ public class Absolute_Drive extends OpMode{
         overMotion = HacherlBot.ConditionInput(overMotion);
         rotate = HacherlBot.ConditionInput(rotate);
 
+        facing = robot.revIMU.getAngularOrientation();
+        if (gamepad1.right_stick_button) {
+            // orientation reset requested
+            initialHeading = facing.firstAngle;
+        }
+
         // Translate from up and over to advance and strafe
         // a positive currentHeadingDelta indicates that the robot has rotated COUNTER-clockwise
         // from its initial position (i.e., from the field reference frame), meaning that advance motion
@@ -126,38 +142,39 @@ public class Absolute_Drive extends OpMode{
         // 0, so the advance is exactly what it was with no correction and strafe remains at 0.
         // With a small angle cos() is just under 1, so advance is just less than upMotion,
         // while (since overMotion is 0) strafe is set to a value just above 0.
-        facing = robot.revIMU.getAngularOrientation();
-        currentHeadingDelta = facing.firstAngle - initialHeading;
+        currentHeadingDelta = normalizeAngle(facing.firstAngle - initialHeading);
         double radCHD = Math.toRadians(currentHeadingDelta);
         advance = upMotion*Math.cos(radCHD) - overMotion*Math.sin(radCHD);
         strafe = overMotion*Math.cos(radCHD) + upMotion*Math.sin(radCHD);
 
+        // if the servo is capable of pointing that far off center, point it to "up"
+        if ((currentHeadingDelta > -SERVO_HALF_RANGE) && (currentHeadingDelta < SERVO_HALF_RANGE)) {
+            robot.pointerServo.setPosition(0.5 + currentHeadingDelta/(SERVO_FULL_RANGE));
+        }
 
-        // Maintain our last heading, if we're not being commanded to turn
+        // Maintain our last heading, unless we're being commanded to turn
         if (rotate != 0.0) {
             // We're being commanded to turn to a new heading, so remember where we are now
             lastCommandedHeading = facing.firstAngle;
         } else {
             // We're not being told to turn, so we're supposed to be holding the current orientation.
             // If we're not, add some rotation to get back to where we should be.
-            double headingDrift =  facing.firstAngle - lastCommandedHeading;
-            //BUGBUG correct for +/- 180 degree wraparound?
+            double headingDrift =  normalizeAngle(facing.firstAngle - lastCommandedHeading);
 
-            // If headingDrift is positive we need to add some right rotation.  Scale the amount
-            // of rotation to the amount of drift, but only add the rotation if we're already
-            // planning to move.  It we're sitting still, just sit still.
+            // Note that (conveniently!) headingDrift is positive if we rotated counterclockwise
+            // from our desired orientation, but that the rotate argument to DriveAt indicates
+            // the amount of clockwise rotation desired.  Thus the signs work out correctly and
+            // all we need do is scale the amount of rotation desired to the amount of drift
+            // observed.
+            // Only add the rotation if we're already planning to move.  It we're sitting still,
+            // just sit still.
             if ((advance != 0.0) || (strafe != 0.0)) {
-                //BUGBUG The scaled amount of correction is a blind guess
+                // /This is arbitrary, but seems to work.
                 rotate = 0.01 * headingDrift;
             }
         }
 
-        // if we're within servo limits, pointer the servo to "up"
-        if ((currentHeadingDelta > -SERVO_HALF_RANGE) && (currentHeadingDelta < SERVO_HALF_RANGE)) {
-            robot.pointerServo.setPosition(0.5 + currentHeadingDelta/(SERVO_FULL_RANGE));
-        }
-
-        robot.DriveAt(advance, strafe, rotate);
+       robot.DriveAt(advance, strafe, rotate);
 
         // Send telemetry message to signify robot running;
         telemetry.addData("facing", " %.1f %.1f %.1f", facing.firstAngle, facing.secondAngle, facing.thirdAngle);
