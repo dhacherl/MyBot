@@ -31,13 +31,14 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.hardware.bosch.BNO055IMU;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import com.qualcomm.robotcore.hardware.CompassSensor;
+//import com.qualcomm.robotcore.hardware.CompassSensor;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
-import com.qualcomm.robotcore.util.ElapsedTime;
+//import com.qualcomm.robotcore.util.ElapsedTime;
 
-import static java.lang.Boolean.FALSE;
+//import static java.lang.Boolean.FALSE;
 
 /**
  * This is NOT an opmode.
@@ -56,13 +57,13 @@ public class HacherlBot
 
     /* local OpMode members. */
     HardwareMap hwMap           =  null;
-    private ElapsedTime period  = new ElapsedTime();
-    private DcMotor  frontLeftDrive   = null;
-    private DcMotor  frontRightDrive  = null;
-    private DcMotor  backLeftDrive   = null;
-    private DcMotor  backRightDrive  = null;
-    private final DcMotor[] driveMotors = new DcMotor[4];
-    private double[] motorPower = new double[4];
+ //   private ElapsedTime period  = new ElapsedTime();
+    private DcMotorEx frontLeftDrive   = null;
+    private DcMotorEx  frontRightDrive  = null;
+    private DcMotorEx  backLeftDrive   = null;
+    private DcMotorEx  backRightDrive  = null;
+    private final DcMotorEx[] driveMotors = new DcMotorEx[4];
+    private final double[] motorPower = new double[4];
     boolean bCurrentlyUsingEncoders = true;
 
     // constants for indices
@@ -112,10 +113,10 @@ public class HacherlBot
         hwMap = ahwMap;
 
         // Define and Initialize Motors
-        frontLeftDrive  = hwMap.get(DcMotor.class, "front_left_drive");
-        frontRightDrive = hwMap.get(DcMotor.class, "front_right_drive");
-        backLeftDrive  = hwMap.get(DcMotor.class, "back_left_drive");
-        backRightDrive = hwMap.get(DcMotor.class, "back_right_drive");
+        frontLeftDrive  = hwMap.get(DcMotorEx.class, "front_left_drive");
+        frontRightDrive = hwMap.get(DcMotorEx.class, "front_right_drive");
+        backLeftDrive  = hwMap.get(DcMotorEx.class, "back_left_drive");
+        backRightDrive = hwMap.get(DcMotorEx.class, "back_right_drive");
 
         // Stick the motors in an array for looping purposes
         driveMotors[indexFL] = frontLeftDrive;
@@ -124,9 +125,9 @@ public class HacherlBot
         driveMotors[indexBR] = backRightDrive;
 
         frontLeftDrive.setDirection(DcMotor.Direction.REVERSE);
-        frontRightDrive.setDirection(DcMotor.Direction.FORWARD);
+        frontRightDrive.setDirection(DcMotor.Direction.REVERSE);
         backLeftDrive.setDirection(DcMotor.Direction.REVERSE);
-        backRightDrive.setDirection(DcMotor.Direction.FORWARD);
+        backRightDrive.setDirection(DcMotor.Direction.REVERSE);
 
         for (int i = 0; i <= maxMotorIndex; i++) {
             // Set all motors to run using encoders.

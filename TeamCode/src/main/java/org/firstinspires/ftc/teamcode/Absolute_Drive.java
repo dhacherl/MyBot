@@ -152,6 +152,40 @@ public class Absolute_Drive extends OpMode{
             robot.pointerServo.setPosition(0.5 + currentHeadingDelta/(SERVO_FULL_RANGE));
         }
 
+        // Use the d-pad to indicate desired absolute orientation
+        if (gamepad1.dpad_up) {
+            if (gamepad1.dpad_left) {
+                // up and left
+                lastCommandedHeading = initialHeading + 45;
+            } else if (gamepad1.dpad_right) {
+                // up and right
+                lastCommandedHeading = initialHeading - 45;
+            } else {
+                // just up
+                lastCommandedHeading = initialHeading;
+            }
+        }
+        else if (gamepad1.dpad_down) {
+            if (gamepad1.dpad_left) {
+                // down and left
+                lastCommandedHeading = initialHeading + 135;
+            } else if (gamepad1.dpad_right) {
+                // down and right
+                lastCommandedHeading = initialHeading - 135;
+            } else {
+                // just down
+                lastCommandedHeading = initialHeading - 180;
+            }
+        } else if (gamepad1.dpad_left) {
+            // pure left
+            lastCommandedHeading = initialHeading + 90;
+        } else if (gamepad1.dpad_right) {
+            // pure right
+            lastCommandedHeading = initialHeading - 90;
+        }
+        lastCommandedHeading = normalizeAngle(lastCommandedHeading);
+
+
         // Maintain our last heading, unless we're being commanded to turn
         if (rotate != 0.0) {
             // We're being commanded to turn to a new heading, so remember where we are now
