@@ -188,24 +188,22 @@ public class Absolute_Drive extends OpMode{
 
         // Maintain our last heading, unless we're being commanded to turn
         if (rotate != 0.0) {
-            // We're being commanded to turn to a new heading, so remember where we are now
+            // We're being commanded to turn to a new heading, so remember where we are now, so that
+            // we will stay here in the future.
             lastCommandedHeading = facing.firstAngle;
         } else {
             // We're not being told to turn, so we're supposed to be holding the current orientation.
-            // If we're not, add some rotation to get back to where we should be.
+            // If we're not doing so, add some rotation to get back to where we should be.
             double headingDrift =  normalizeAngle(facing.firstAngle - lastCommandedHeading);
 
             // Note that (conveniently!) headingDrift is positive if we rotated counterclockwise
             // from our desired orientation, but that the rotate argument to DriveAt indicates
             // the amount of clockwise rotation desired.  Thus the signs work out correctly and
-            // all we need do is scale the amount of rotation desired to the amount of drift
+            // all we need do is scale the amount of rotation desired by the amount of drift
             // observed.
-            // Only add the rotation if we're already planning to move.  It we're sitting still,
-            // just sit still.
-            if ((advance != 0.0) || (strafe != 0.0)) {
-                // /This is arbitrary, but seems to work.
-                rotate = 0.01 * headingDrift;
-            }
+
+            // This is an arbitrary scale factor, but seems to work.
+            rotate = 0.01 * headingDrift;
         }
 
        robot.DriveAt(advance, strafe, rotate);
