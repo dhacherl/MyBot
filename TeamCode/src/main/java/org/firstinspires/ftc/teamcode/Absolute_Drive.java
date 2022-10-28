@@ -35,8 +35,8 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
 
-import static org.firstinspires.ftc.teamcode.HacherlBot.SERVO_FULL_RANGE;
-import static org.firstinspires.ftc.teamcode.HacherlBot.SERVO_HALF_RANGE;
+// import static org.firstinspires.ftc.teamcode.HacherlBot.SERVO_FULL_RANGE;
+// import static org.firstinspires.ftc.teamcode.HacherlBot.SERVO_HALF_RANGE;
 
 /**
  * This file provides basic Teleop driving for a robot.
@@ -57,6 +57,7 @@ public class Absolute_Drive extends OpMode{
     HacherlBot robot  = new HacherlBot(); // use the class created to define a HacherlBot's hardware
     double initialHeading;
     double lastCommandedHeading;
+    boolean intakeMode = false;
 
     /*
      * Code to run ONCE when the driver hits INIT
@@ -134,6 +135,21 @@ public class Absolute_Drive extends OpMode{
             initialHeading = facing.firstAngle;
         }
 
+        // The robot has special driving mode when the intake is enabled.
+        if (gamepad1.left_stick_button) {
+            if (!intakeMode) {
+                // If we're just switching in to intake mode, turn on the intake
+                robot.IntakeOn();
+                intakeMode = true;
+            }
+        } else {
+            if (intakeMode) {
+                // If we're just switching out of intake mode, turn off the intake
+                robot.IntakeOff();
+                intakeMode = false;
+            }
+        }
+
         // Translate from up and over to advance and strafe
         // a positive currentHeadingDelta indicates that the robot has rotated COUNTER-clockwise
         // from its initial position (i.e., from the field reference frame), meaning that advance motion
@@ -148,40 +164,58 @@ public class Absolute_Drive extends OpMode{
         strafe = overMotion*Math.cos(radCHD) + upMotion*Math.sin(radCHD);
 
         // if the servo is capable of pointing that far off center, point it to "up"
-        if ((currentHeadingDelta > -SERVO_HALF_RANGE) && (currentHeadingDelta < SERVO_HALF_RANGE)) {
-            robot.pointerServo.setPosition(0.5 + currentHeadingDelta/(SERVO_FULL_RANGE));
-        }
+        // if ((currentHeadingDelta > -SERVO_HALF_RANGE) && (currentHeadingDelta < SERVO_HALF_RANGE)) {
+        //     robot.pointerServo.setPosition(0.5 + currentHeadingDelta/(SERVO_FULL_RANGE));
+        // }
 
-        // Use the d-pad to indicate desired absolute orientation
-        if (gamepad1.dpad_up) {
-            if (gamepad1.dpad_left) {
-                // up and left
-                lastCommandedHeading = initialHeading + 45;
-            } else if (gamepad1.dpad_right) {
-                // up and right
-                lastCommandedHeading = initialHeading - 45;
-            } else {
-                // just up
-                lastCommandedHeading = initialHeading;
+        if (intakeMode) {
+            // If we're in intake mode then point the front of the robot in the direction of motion
+            // so that objects we encounter will hit the intake mechanism.
+            // We do this by treating the overMotion and upMotion as a velocity vector in
+            // Cartesian coordinates which we then convert to polar coordinates (r, theta).
+            // We use the r to see if we're moving enough to justify rotation, and the theta to
+            // set the desired orientation.
+            double rMotion = Math.sqrt(overMotion*overMotion + upMotion*upMotion);
+            double thetaMotion = Math.toDegrees(Math.atan2(upMotion, overMotion));
+            if (rMotion >= 0.02) {
+                // If we're moving, set the heading to maintain to the power direction. Note that
+                // thetaMotion is in polar coordinates, with 0 degrees being pure right, while
+                // heading is deviation from straight up, which is 90 degrees different.
+                lastCommandedHeading = thetaMotion - 90.0;
             }
+            rotate = 0.0; // ignore any commanded rotation input
         }
-        else if (gamepad1.dpad_down) {
-            if (gamepad1.dpad_left) {
-                // down and left
-                lastCommandedHeading = initialHeading + 135;
+        else { //not in intake steering mode
+            // Use the d-pad to indicate desired absolute orientation
+            if (gamepad1.dpad_up) {
+                if (gamepad1.dpad_left) {
+                    // up and left
+                    lastCommandedHeading = initialHeading + 45;
+                } else if (gamepad1.dpad_right) {
+                    // up and right
+                    lastCommandedHeading = initialHeading - 45;
+                } else {
+                    // just up
+                    lastCommandedHeading = initialHeading;
+                }
+            } else if (gamepad1.dpad_down) {
+                if (gamepad1.dpad_left) {
+                    // down and left
+                    lastCommandedHeading = initialHeading + 135;
+                } else if (gamepad1.dpad_right) {
+                    // down and right
+                    lastCommandedHeading = initialHeading - 135;
+                } else {
+                    // just down
+                    lastCommandedHeading = initialHeading - 180;
+                }
+            } else if (gamepad1.dpad_left) {
+                // pure left
+                lastCommandedHeading = initialHeading + 90;
             } else if (gamepad1.dpad_right) {
-                // down and right
-                lastCommandedHeading = initialHeading - 135;
-            } else {
-                // just down
-                lastCommandedHeading = initialHeading - 180;
+                // pure right
+                lastCommandedHeading = initialHeading - 90;
             }
-        } else if (gamepad1.dpad_left) {
-            // pure left
-            lastCommandedHeading = initialHeading + 90;
-        } else if (gamepad1.dpad_right) {
-            // pure right
-            lastCommandedHeading = initialHeading - 90;
         }
         lastCommandedHeading = normalizeAngle(lastCommandedHeading);
 

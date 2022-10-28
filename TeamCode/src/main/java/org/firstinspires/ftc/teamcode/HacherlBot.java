@@ -34,6 +34,7 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 //import com.qualcomm.robotcore.hardware.CompassSensor;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 //import com.qualcomm.robotcore.util.ElapsedTime;
@@ -51,20 +52,21 @@ public class HacherlBot
 {
     /* Public OpMode members. */
     public BNO055IMU revIMU;
-    public Servo pointerServo;
-    public static final double SERVO_HALF_RANGE = 135.0;
-    public static final double SERVO_FULL_RANGE = 2.0 * SERVO_HALF_RANGE;
+ // removed   public Servo pointerServo;
+ //   public static final double SERVO_HALF_RANGE = 135.0;
+ //   public static final double SERVO_FULL_RANGE = 2.0 * SERVO_HALF_RANGE;
 
     /* local OpMode members. */
     HardwareMap hwMap           =  null;
  //   private ElapsedTime period  = new ElapsedTime();
-    private DcMotorEx frontLeftDrive   = null;
+    private DcMotorEx  frontLeftDrive   = null;
     private DcMotorEx  frontRightDrive  = null;
     private DcMotorEx  backLeftDrive   = null;
     private DcMotorEx  backRightDrive  = null;
     private final DcMotorEx[] driveMotors = new DcMotorEx[4];
     private final double[] motorPower = new double[4];
     boolean bCurrentlyUsingEncoders = true;
+    private DcMotorEx intakeMotor = null;
 
     // constants for indices
     private final static int indexFL = 0;
@@ -140,8 +142,13 @@ public class HacherlBot
 
         revIMU = hwMap.get(BNO055IMU.class, "imu");
 
-        pointerServo = hwMap.get(Servo.class, "pointer_servo");
-        pointerServo.setPosition(0.5);
+        intakeMotor = hwMap.get(DcMotorEx.class, "intake_motor");
+        intakeMotor.setDirection(DcMotorEx.Direction.REVERSE);
+        intakeMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        intakeMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+
+        // pointerServo = hwMap.get(Servo.class, "pointer_servo");
+        // pointerServo.setPosition(0.5);
     }
 
     /* Basic Teleop drive method */
@@ -276,6 +283,7 @@ public class HacherlBot
         frontRightDrive.setPower(0.0);
         backLeftDrive.setPower(0.0);
         backRightDrive.setPower(0.0);
+        intakeMotor.setPower(0.0);
 
         frontLeftDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         frontRightDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
@@ -283,5 +291,14 @@ public class HacherlBot
         backRightDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
 
     }
- }
+
+    public void IntakeOn() {
+        intakeMotor.setPower(1.0);
+     }
+    public void IntakeOff() {
+        intakeMotor.setPower(0.0);
+   }
+
+
+}
 
