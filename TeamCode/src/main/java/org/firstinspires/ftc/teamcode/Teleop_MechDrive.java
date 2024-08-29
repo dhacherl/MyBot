@@ -29,10 +29,8 @@
 
 package org.firstinspires.ftc.teamcode;
 
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import java.lang.Math;
 
 /**
  * This file provides basic Teleop driving for a robot.
@@ -149,25 +147,17 @@ public class Teleop_MechDrive extends OpMode{
         double strafe;
         double rotate;
 
-        // Just some quick A/B testing with encoders
-        if (gamepad1.a) {
-            robot.useEncoders(true);
-        }
-        if (gamepad1.b) {
-            robot.useEncoders(false);
-        }
-
         // (note: The joystick goes negative when pushed forwards, so negate it)
         advance = -gamepad1.right_stick_y;
         strafe = gamepad1.right_stick_x;
         rotate = gamepad1.left_stick_x;
 
         // adjust sensitivity and dead spot
-        advance = HacherlBot.ConditionInput(advance);
-        strafe = HacherlBot.ConditionInput(strafe);
-        rotate = HacherlBot.ConditionInput(rotate);
+        advance = HacherlBot.conditionInput(advance);
+        strafe = HacherlBot.conditionInput(strafe);
+        rotate = HacherlBot.conditionInput(rotate);
 
-        robot.DriveAt(advance, strafe, rotate);
+        robot.driveAt(advance, strafe, rotate);
 
         // Send telemetry message to signify robot running;
         telemetry.addData("advance",  "%.3f", advance);

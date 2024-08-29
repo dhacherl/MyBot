@@ -32,6 +32,7 @@ package org.firstinspires.ftc.teamcode;
 import com.qualcomm.hardware.bosch.BNO055IMU;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
 
@@ -57,7 +58,12 @@ public class Absolute_Drive extends OpMode{
     HacherlBot robot  = new HacherlBot(); // use the class created to define a HacherlBot's hardware
     double initialHeading;
     double lastCommandedHeading;
-    boolean intakeMode = false;
+    boolean gripped = false;
+    enum LiftCmdDirection {DOWN, NONE, UP }
+    LiftCmdDirection prevLiftCmd = LiftCmdDirection.NONE;
+    enum AutoGrabState {IDLE, DESCENDING, GRABBING, FINISHED}
+    private AutoGrabState grabState;
+    private ElapsedTime grabTime;
 
     /*
      * Code to run ONCE when the driver hits INIT
@@ -69,7 +75,7 @@ public class Absolute_Drive extends OpMode{
          */
         robot.init(hardwareMap);
 
-        //BUGBUG Initialize IMU, determine starting robot orientation
+        //TODO Initialize IMU, determine starting robot orientation
         BNO055IMU.Parameters imuParams;
         imuParams = new BNO055IMU.Parameters();
         imuParams.angleUnit = BNO055IMU.AngleUnit.DEGREES;
@@ -77,6 +83,9 @@ public class Absolute_Drive extends OpMode{
         // Orientation
         initialHeading = robot.revIMU.getAngularOrientation().firstAngle;
         lastCommandedHeading = initialHeading;
+
+        grabState = AutoGrabState.IDLE;
+        this.grabTime = new ElapsedTime(ElapsedTime.Resolution.MILLISECONDS);
 
         // Send telemetry message to signify robot waiting;
         telemetry.addData("Hello Driver, initial orientation is", "%.1f", initialHeading);
@@ -120,34 +129,19 @@ public class Absolute_Drive extends OpMode{
         Orientation facing;
 
         // (note: The joystick goes negative when pushed forwards, so negate it)
-        upMotion = -gamepad1.right_stick_y;
-        overMotion = gamepad1.right_stick_x;
-        rotate = gamepad1.left_stick_x;
+        upMotion = -gamepad1.left_stick_y;
+        overMotion = gamepad1.left_stick_x;
+        rotate = gamepad1.right_stick_x;
 
         // adjust for sensitivity and dead spot
-        upMotion = HacherlBot.ConditionInput(upMotion);
-        overMotion = HacherlBot.ConditionInput(overMotion);
-        rotate = HacherlBot.ConditionInput(rotate);
+        upMotion = HacherlBot.conditionInput(upMotion);
+        overMotion = HacherlBot.conditionInput(overMotion);
+        rotate = HacherlBot.conditionInput(rotate);
 
         facing = robot.revIMU.getAngularOrientation();
         if (gamepad1.right_stick_button) {
             // orientation reset requested
             initialHeading = facing.firstAngle;
-        }
-
-        // The robot has special driving mode when the intake is enabled.
-        if (gamepad1.left_stick_button) {
-            if (!intakeMode) {
-                // If we're just switching in to intake mode, turn on the intake
-                robot.IntakeOn();
-                intakeMode = true;
-            }
-        } else {
-            if (intakeMode) {
-                // If we're just switching out of intake mode, turn off the intake
-                robot.IntakeOff();
-                intakeMode = false;
-            }
         }
 
         // Translate from up and over to advance and strafe
@@ -168,57 +162,67 @@ public class Absolute_Drive extends OpMode{
         //     robot.pointerServo.setPosition(0.5 + currentHeadingDelta/(SERVO_FULL_RANGE));
         // }
 
-        if (intakeMode) {
-            // If we're in intake mode then point the front of the robot in the direction of motion
-            // so that objects we encounter will hit the intake mechanism.
-            // We do this by treating the overMotion and upMotion as a velocity vector in
-            // Cartesian coordinates which we then convert to polar coordinates (r, theta).
-            // We use the r to see if we're moving enough to justify rotation, and the theta to
-            // set the desired orientation.
-            double rMotion = Math.sqrt(overMotion*overMotion + upMotion*upMotion);
-            double thetaMotion = Math.toDegrees(Math.atan2(upMotion, overMotion));
-            if (rMotion >= 0.02) {
-                // If we're moving, set the heading to maintain to the power direction. Note that
-                // thetaMotion is in polar coordinates, with 0 degrees being pure right, while
-                // heading is deviation from straight up, which is 90 degrees different.
-                lastCommandedHeading = thetaMotion - 90.0;
-            }
-            rotate = 0.0; // ignore any commanded rotation input
-        }
-        else { //not in intake steering mode
-            // Use the d-pad to indicate desired absolute orientation
-            if (gamepad1.dpad_up) {
-                if (gamepad1.dpad_left) {
-                    // up and left
-                    lastCommandedHeading = initialHeading + 45;
-                } else if (gamepad1.dpad_right) {
-                    // up and right
-                    lastCommandedHeading = initialHeading - 45;
-                } else {
-                    // just up
-                    lastCommandedHeading = initialHeading;
-                }
-            } else if (gamepad1.dpad_down) {
-                if (gamepad1.dpad_left) {
-                    // down and left
-                    lastCommandedHeading = initialHeading + 135;
-                } else if (gamepad1.dpad_right) {
-                    // down and right
-                    lastCommandedHeading = initialHeading - 135;
-                } else {
-                    // just down
-                    lastCommandedHeading = initialHeading - 180;
-                }
-            } else if (gamepad1.dpad_left) {
-                // pure left
-                lastCommandedHeading = initialHeading + 90;
+        /*
+        // Use the d-pad to indicate desired absolute orientation
+        if (gamepad1.dpad_up) {
+            if (gamepad1.dpad_left) {
+                // up and left
+                lastCommandedHeading = initialHeading + 45;
             } else if (gamepad1.dpad_right) {
-                // pure right
-                lastCommandedHeading = initialHeading - 90;
+                // up and right
+                lastCommandedHeading = initialHeading - 45;
+            } else {
+                // just up
+                lastCommandedHeading = initialHeading;
             }
+        } else if (gamepad1.dpad_down) {
+            if (gamepad1.dpad_left) {
+                // down and left
+                lastCommandedHeading = initialHeading + 135;
+            } else if (gamepad1.dpad_right) {
+                // down and right
+                lastCommandedHeading = initialHeading - 135;
+            } else {
+                // just down
+                lastCommandedHeading = initialHeading - 180;
+            }
+        } else if (gamepad1.dpad_left) {
+            // pure left
+            lastCommandedHeading = initialHeading + 90;
+        } else if (gamepad1.dpad_right) {
+            // pure right
+            lastCommandedHeading = initialHeading - 90;
         }
+        */
         lastCommandedHeading = normalizeAngle(lastCommandedHeading);
 
+
+
+        if (gamepad1.dpad_right) {
+            if (!gripped) {
+                robot.grip();
+                gripped = true;
+            }
+        }else if (gamepad1.dpad_left) {
+            if (gripped) {
+                robot.release();
+                gripped = false;
+            }
+        }
+        if (gamepad1.dpad_up) {
+            if (prevLiftCmd != LiftCmdDirection.UP) {
+                prevLiftCmd = LiftCmdDirection.UP;
+                robot.liftUp();
+            }
+        } else if (gamepad1.dpad_down) {
+            if (prevLiftCmd != LiftCmdDirection.DOWN) {
+                prevLiftCmd = LiftCmdDirection.DOWN;
+                robot.liftDown();
+            }
+        } else {
+            // Neither up nor down requested, so
+            prevLiftCmd = LiftCmdDirection.NONE;
+        }
 
         // Maintain our last heading, unless we're being commanded to turn
         if (rotate != 0.0) {
@@ -240,15 +244,55 @@ public class Absolute_Drive extends OpMode{
             rotate = 0.01 * headingDrift;
         }
 
-       robot.DriveAt(advance, strafe, rotate);
+       robot.driveAt(advance, strafe, rotate);
+
+        switch (grabState) {
+            case IDLE:
+                if (gamepad1.left_bumper && robot.curLiftStop == 1) {
+                    robot.release();
+                    gripped = false;
+                    robot.liftDown();
+                    grabState = AutoGrabState.DESCENDING;
+                }
+                break;
+            case DESCENDING:
+                if (!robot.isLiftMoving()) {
+                    // lift has stopped moving, so we can advance to next state
+                    robot.grip();
+                    gripped = true;
+                    grabTime.reset();
+                    grabState = AutoGrabState.GRABBING;
+                }
+                break;
+            case GRABBING:
+                // By REV documentation 200ms should be long enough, but the gripper sometimes
+                // misses.  Allowing an extra 50ms to see if that helps.
+                if (grabTime.milliseconds() > 250) {
+                    robot.liftUp();
+                    grabState = AutoGrabState.FINISHED;
+                }
+                break;
+            case FINISHED:
+                if (!gamepad1.left_bumper) {
+                    // if the button has been released, go back to idle state
+                    grabState = AutoGrabState.IDLE;
+                }
+                break;
+        }
 
         // Send telemetry message to signify robot running;
+        /*
         telemetry.addData("facing", " %.1f %.1f %.1f", facing.firstAngle, facing.secondAngle, facing.thirdAngle);
         telemetry.addData("heading delta", "%.1f", currentHeadingDelta);
         telemetry.addData("up and over", "%.3f   %.3f", upMotion, overMotion);
         telemetry.addData("advance",  "%.3f", advance);
         telemetry.addData("strafe",  "%.3f", strafe);
         telemetry.addData("rotate", "%.3f", rotate);
+        */
+        telemetry.addData("Current lift stop ", robot.curLiftStop);
+        telemetry.addData("   and tick count ", robot.getLiftPos());
+        telemetry.addData("Mandrel is ", gripped ? "gripped" : "open");
+        telemetry.update();
     }
 
     /*
